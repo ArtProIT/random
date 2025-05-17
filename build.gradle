@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.formdev:flatlaf:3.4' // UI-библиотека (необязательно, можно удалить)
+}
+
+application {
+    mainClass = 'com.example.RandomNumberApp'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
