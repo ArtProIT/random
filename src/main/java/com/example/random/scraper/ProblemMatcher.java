@@ -1,65 +1,105 @@
 package com.example.random.scraper;
 
+import com.example.random.model.ProblemInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
 
 /**
- * Класс для сопоставления названий задач с их номерами
+ * Улучшенный класс для сопоставления названий задач с их информацией
  */
 public class ProblemMatcher {
+    private static final Logger logger = LoggerFactory.getLogger(ProblemMatcher.class);
     private static final double SIMILARITY_THRESHOLD = 0.8;
 
     /**
-     * Находит номер задачи по её названию
+     * Находит информацию о задаче по её названию
      */
-    public Integer findProblemNumber(String solvedTitle, Map<String, Integer> allProblems) {
+    public ProblemInfo findProblemInfo(String solvedTitle, Map<String, ProblemInfo> allProblems) {
         // Точное совпадение
-        Integer exactMatch = allProblems.get(solvedTitle);
+        ProblemInfo exactMatch = allProblems.get(solvedTitle);
         if (exactMatch != null) {
+            logger.debug("Exact match found for: {}", solvedTitle);
             return exactMatch;
         }
-        return findBestMatch(solvedTitle, allProblems);
+
+        ProblemInfo bestMatch = findBestMatch(solvedTitle, allProblems);
+        if (bestMatch != null) {
+            logger.debug("Best match found for '{}': {}", solvedTitle, bestMatch.getTitle());
+        } else {
+            logger.warn("No match found for: {}", solvedTitle);
+        }
+
+        return bestMatch;
     }
 
-    private Integer findBestMatch(String solvedTitle, Map<String, Integer> allProblems) {
-        String normalizedSolved = normalizeTitle(solvedTitle);
 
-        for (Map.Entry<String, Integer> entry : allProblems.entrySet()) {
+    private ProblemInfo findBestMatch(String solvedTitle, Map<String, ProblemInfo> allProblems) {
+        String normalizedSolved = normalizeTitle(solvedTitle);
+        ProblemInfo bestMatch = null;
+        double bestSimilarity = 0.0;
+
+        for (Map.Entry<String, ProblemInfo> entry : allProblems.entrySet()) {
             String problemTitle = entry.getKey();
             String normalizedProblem = normalizeTitle(problemTitle);
 
-            if (isMatchingTitle(normalizedSolved, normalizedProblem)) {
+            if (isExactMatch(normalizedSolved, normalizedProblem)) {
                 return entry.getValue();
+            }
+
+            double similarity = calculateSimilarity(normalizedSolved, normalizedProblem);
+            if (similarity > SIMILARITY_THRESHOLD && similarity > bestSimilarity) {
+                bestSimilarity = similarity;
+                bestMatch = entry.getValue();
             }
         }
 
-        return null;
+        return bestMatch;
     }
 
-    private boolean isMatchingTitle(String normalizedSolved, String normalizedProblem) {
+    private boolean isExactMatch(String normalizedSolved, String normalizedProblem) {
         return normalizedProblem.equals(normalizedSolved) ||
                 normalizedProblem.contains(normalizedSolved) ||
-                normalizedSolved.contains(normalizedProblem) ||
-                calculateSimilarity(normalizedSolved, normalizedProblem) > SIMILARITY_THRESHOLD;
+                normalizedSolved.contains(normalizedProblem);
     }
 
     private String normalizeTitle(String title) {
+        if (title == null) {
+            return "";
+        }
+
         return title.toLowerCase()
-                .replaceAll("[^a-z0-9\\s]", "") //Удаляю специальные символы
-                .replaceAll("\\s+", " ")        //Множественные пробелы в один
+                .replaceAll("[^a-z0-9\\s]", "") // Удаляю специальные символы
+                .replaceAll("\\s+", " ")        // Множественные пробелы в один
                 .trim();
     }
 
     private double calculateSimilarity(String s1, String s2) {
-        if (s1.equals(s2)) return 1.0;
+        if (s1 == null || s2 == null) {
+            return 0.0;
+        }
+
+        if (s1.equals(s2)) {
+            return 1.0;
+        }
 
         int maxLength = Math.max(s1.length(), s2.length());
-        if (maxLength == 0) return 1.0;
+        if (maxLength == 0) {
+            return 1.0;
+        }
 
-        return (maxLength - levenshteinDistance(s1, s2)) / (double) maxLength;
+        int distance = levenshteinDistance(s1, s2);
+        return (maxLength - distance) / (double) maxLength;
     }
 
     private int levenshteinDistance(String s1, String s2) {
+        if (s1 == null || s2 == null) {
+            return Math.max(s1 != null ? s1.length() : 0, s2 != null ? s2.length() : 0);
+        }
+
         int[] costs = new int[s2.length() + 1];
+
         for (int i = 0; i <= s1.length(); i++) {
             int lastValue = i;
             for (int j = 0; j <= s2.length(); j++) {
@@ -80,6 +120,7 @@ public class ProblemMatcher {
                 costs[s2.length()] = lastValue;
             }
         }
+
         return costs[s2.length()];
     }
 }

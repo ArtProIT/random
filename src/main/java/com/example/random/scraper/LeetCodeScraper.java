@@ -1,26 +1,33 @@
 package com.example.random.scraper;
 
+import com.example.random.config.ScrapingConfig;
+import com.example.random.exception.LeetCodeExceptions.*;
+import com.example.random.model.ProblemDifficulty;
+import com.example.random.model.ProblemInfo;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Класс для получения данных с LeetCode через веб-скрапинг
+ * Улучшенный класс для получения данных с LeetCode через веб-скрапинг
  */
 public class LeetCodeScraper {
-    private static final int DEFAULT_WAIT_TIME = 3000;
-    private static final int JSON_WAIT_TIME = 2000;
-    private static final int SOLVED_PROBLEMS_WAIT = 5000;
+    private static final Logger logger = LoggerFactory.getLogger(LeetCodeScraper.class);
+
+    private static final Map<String, Map<String, ProblemInfo>> problemsCache = new ConcurrentHashMap<>();
+    private static long cacheTimestamp = 0;
+    private static final long CACHE_EXPIRY_TIME = 24 * 60 * 60 * 1000;
 
     private Consumer<String> progressCallback;
+    private final Random random = new Random();
 
-    /**
-     * Устанавливает callback для отображения прогресса
-     */
     public void setProgressCallback(Consumer<String> callback) {
         this.progressCallback = callback;
     }
@@ -29,27 +36,24 @@ public class LeetCodeScraper {
         if (progressCallback != null) {
             progressCallback.accept(message);
         }
-        System.out.println(message);
+        logger.info(message);
     }
 
     /**
      * Получает номера решенных задач для указанного пользователя
      */
-    public Set<Integer> fetchSolvedProblems(String username) {
+    public Set<Integer> fetchSolvedProblems(String username) throws LeetCodeScrapingException {
         Set<Integer> solvedProblems = new HashSet<>();
 
         try (Playwright playwright = Playwright.create()) {
             logProgress("Запускаем браузер Chromium...");
-            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                    .setHeadless(false)
-                    .setSlowMo(300));
-
-            Page page = browser.newPage();
+            Browser browser = createBrowser(playwright);
+            Page page = createPage(browser);
 
             logProgress("Переходим на профиль пользователя: " + username);
 
-            // Получаем решенные задачи
-            Set<String> solvedTitles = getSolvedProblemsFromProfile(page, username);
+            // Получаем решенные задачи с retry логикой
+            Set<String> solvedTitles = getSolvedProblemsWithRetry(page, username);
             if (solvedTitles.isEmpty()) {
                 logProgress("Решенные задачи не найдены");
                 browser.close();
@@ -60,7 +64,7 @@ public class LeetCodeScraper {
 
             // Получаем все задачи с номерами
             logProgress("Получаем полный список задач через API...");
-            Map<String, Integer> allProblems = getAllProblemsFromAPI(page);
+            Map<String, ProblemInfo> allProblems = getAllProblemsFromAPI(page);
             logProgress("Загружено всего задач: " + allProblems.size());
 
             // Сопоставляем решенные задачи с номерами
@@ -71,56 +75,128 @@ public class LeetCodeScraper {
             logProgress("Процесс завершен успешно!");
 
         } catch (Exception e) {
-            logProgress("Ошибка при получении данных: " + e.getMessage());
-            e.printStackTrace();
+            String errorMsg = "Ошибка при получении данных: " + e.getMessage();
+            logProgress(errorMsg);
+            logger.error(errorMsg, e);
+            throw new LeetCodeScrapingException(errorMsg, e);
         }
 
         return solvedProblems;
     }
 
-    private Set<String> getSolvedProblemsFromProfile(Page page, String username) {
-        Set<String> solvedTitles = new HashSet<>();
+    /**
+     * Получает все задачи из API с информацией о сложности
+     */
+    public Map<String, ProblemInfo> getAllProblemsInfo() throws ApiDataException {
+        // Проверяем кэш
+        if (isCacheValid()) {
+            logProgress("Используем кэшированные данные API");
+            return new HashMap<>(problemsCache.get("problems"));
+        }
 
-        try {
-            String profileUrl = "https://leetcode.com/u/" + username + "/";
-            page.navigate(profileUrl);
-            page.waitForLoadState(LoadState.NETWORKIDLE);
-            Thread.sleep(DEFAULT_WAIT_TIME);
-            logProgress("Профиль пользователя загружен");
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = createBrowser(playwright);
+            Page page = createPage(browser);
 
-            // Попытка найти и кликнуть Recent AC
-            logProgress("Ищем раздел с решенными задачами...");
-            if (clickRecentAC(page)) {
-                logProgress("Найден и открыт раздел Recent AC");
-                Thread.sleep(SOLVED_PROBLEMS_WAIT);
-            } else {
-                logProgress("Раздел Recent AC не найден, ищем решенные задачи на странице");
-            }
+            Map<String, ProblemInfo> problems = getAllProblemsFromAPI(page);
 
-            // Собираем данные о решенных задачах
-            logProgress("Извлекаем названия решенных задач...");
-            solvedTitles = extractSolvedProblems(page);
+            // Обновляем кэш
+            problemsCache.put("problems", problems);
+            cacheTimestamp = System.currentTimeMillis();
+
+            browser.close();
+            return problems;
 
         } catch (Exception e) {
-            logProgress("Ошибка при получении решенных задач: " + e.getMessage());
-            e.printStackTrace();
+            throw new ApiDataException("Failed to fetch problems info", e);
         }
+    }
+
+    private Browser createBrowser(Playwright playwright) {
+        return playwright.chromium().launch(new BrowserType.LaunchOptions()
+                .setHeadless(false)
+                .setSlowMo(300));
+    }
+
+    private Page createPage(Browser browser) {
+        Page page = browser.newPage();
+
+        // Устанавливаем случайный User-Agent
+        String userAgent = ScrapingConfig.USER_AGENTS[random.nextInt(ScrapingConfig.USER_AGENTS.length)];
+        page.setExtraHTTPHeaders(Map.of("User-Agent", userAgent));
+
+        return page;
+    }
+
+    private Set<String> getSolvedProblemsWithRetry(Page page, String username) throws LeetCodeScrapingException {
+        int attempts = 0;
+        Exception lastException = null;
+
+        while (attempts < ScrapingConfig.MAX_RETRY_ATTEMPTS) {
+            try {
+                attempts++;
+                logProgress("Попытка " + attempts + " получения решенных задач...");
+
+                Set<String> result = getSolvedProblemsFromProfile(page, username);
+                if (!result.isEmpty()) {
+                    return result;
+                }
+
+                if (attempts < ScrapingConfig.MAX_RETRY_ATTEMPTS) {
+                    logProgress("Решенные задачи не найдены, повторяем через " + ScrapingConfig.RETRY_DELAY + "мс...");
+                    Thread.sleep(ScrapingConfig.RETRY_DELAY);
+                }
+
+            } catch (Exception e) {
+                lastException = e;
+                logProgress("Ошибка в попытке " + attempts + ": " + e.getMessage());
+
+                if (attempts < ScrapingConfig.MAX_RETRY_ATTEMPTS) {
+                    try {
+                        Thread.sleep(ScrapingConfig.RETRY_DELAY);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new LeetCodeScrapingException("Interrupted during retry", ie);
+                    }
+                }
+            }
+        }
+
+        throw new LeetCodeScrapingException("Failed to get solved problems after " +
+                ScrapingConfig.MAX_RETRY_ATTEMPTS + " attempts", lastException);
+    }
+
+    private Set<String> getSolvedProblemsFromProfile(Page page, String username) throws Exception {
+        Set<String> solvedTitles = new HashSet<>();
+
+        String profileUrl = String.format(ScrapingConfig.LEETCODE_PROFILE_URL_TEMPLATE, username);
+        page.navigate(profileUrl);
+
+
+        page.waitForLoadState(LoadState.NETWORKIDLE);
+        page.waitForFunction("() => document.readyState === 'complete'");
+        Thread.sleep(ScrapingConfig.DEFAULT_WAIT_TIME);
+
+        logProgress("Профиль пользователя загружен");
+
+        // Попытка найти и кликнуть Recent AC
+        logProgress("Ищем раздел с решенными задачами...");
+        if (clickRecentAC(page)) {
+            logProgress("Найден и открыт раздел Recent AC");
+            Thread.sleep(ScrapingConfig.SOLVED_PROBLEMS_WAIT);
+        } else {
+            logProgress("Раздел Recent AC не найден, ищем решенные задачи на странице");
+        }
+
+        // Собираем данные о решенных задачах
+        logProgress("Извлекаем названия решенных задач...");
+        solvedTitles = extractSolvedProblems(page);
 
         return solvedTitles;
     }
 
     private boolean clickRecentAC(Page page) {
-        String[] recentAcSelectors = {
-                "text=Recent AC",
-                "[data-cy='recent-ac']",
-                "button:has-text('Recent AC')",
-                "a:has-text('Recent AC')",
-                ".recent-ac",
-                "[aria-label*='Recent']",
-                "span:has-text('Recent AC')"
-        };
-
-        for (String selector : recentAcSelectors) {
+        for (String selector : ScrapingConfig.RECENT_AC_SELECTORS) {
             try {
                 if (page.locator(selector).count() > 0) {
                     logProgress("Найдена кнопка Recent AC: " + selector);
@@ -128,23 +204,16 @@ public class LeetCodeScraper {
                     return true;
                 }
             } catch (Exception e) {
-                // Продолжаем поиск другими селекторами
+                logger.debug("Selector {} failed: {}", selector, e.getMessage());
             }
         }
-
         return false;
     }
 
     private Set<String> extractSolvedProblems(Page page) {
         Set<String> solvedTitles = new HashSet<>();
 
-        String[] solvedSelectors = {
-                "[data-title]",
-                "span.text-label-1",
-                "a[href*='/submissions/detail/']"
-        };
-
-        for (String selector : solvedSelectors) {
+        for (String selector : ScrapingConfig.SOLVED_PROBLEM_SELECTORS) {
             try {
                 List<ElementHandle> elements = page.querySelectorAll(selector);
                 logProgress("Найдено элементов с селектором '" + selector + "': " + elements.size());
@@ -170,13 +239,11 @@ public class LeetCodeScraper {
 
     private String extractTitleFromElement(ElementHandle element) {
         try {
-            // Попытка получить title из data-title атрибута
             String dataTitle = element.getAttribute("data-title");
             if (dataTitle != null && !dataTitle.trim().isEmpty()) {
                 return dataTitle.trim();
             }
 
-            // Иначе берем текст элемента
             String text = element.textContent();
             if (text != null && !text.trim().isEmpty()) {
                 String[] lines = text.split("\\n");
@@ -184,7 +251,7 @@ public class LeetCodeScraper {
                 return firstLine.replaceFirst("^\\d+\\.\\s*", "").trim();
             }
         } catch (Exception e) {
-            System.out.println("Ошибка извлечения заголовка: " + e.getMessage());
+            logger.debug("Error extracting title: {}", e.getMessage());
         }
 
         return null;
@@ -195,28 +262,22 @@ public class LeetCodeScraper {
                 !title.contains("days ago") && !title.matches("\\d+");
     }
 
-    private Map<String, Integer> getAllProblemsFromAPI(Page page) {
-        Map<String, Integer> allProblems = new HashMap<>();
+    private Map<String, ProblemInfo> getAllProblemsFromAPI(Page page) throws Exception {
+        Map<String, ProblemInfo> allProblems = new HashMap<>();
 
-        try {
-            page.navigate("https://leetcode.com/api/problems/all/");
-            page.waitForLoadState(LoadState.NETWORKIDLE);
-            Thread.sleep(JSON_WAIT_TIME);
-            logProgress("API данные получены");
+        page.navigate(ScrapingConfig.LEETCODE_API_URL);
+        page.waitForLoadState(LoadState.NETWORKIDLE);
+        Thread.sleep(ScrapingConfig.JSON_WAIT_TIME);
+        logProgress("API данные получены");
 
-            String json = (String) page.evaluate("() => document.body.innerText");
-            allProblems = parseProblemsFromJSON(json);
-
-        } catch (Exception e) {
-            logProgress("Ошибка при получении задач из JSON API: " + e.getMessage());
-            e.printStackTrace();
-        }
+        String json = (String) page.evaluate("() => document.body.innerText");
+        allProblems = parseProblemsFromJSON(json);
 
         return allProblems;
     }
 
-    private Map<String, Integer> parseProblemsFromJSON(String json) {
-        Map<String, Integer> allProblems = new HashMap<>();
+    private Map<String, ProblemInfo> parseProblemsFromJSON(String json) {
+        Map<String, ProblemInfo> allProblems = new HashMap<>();
 
         try {
             JSONObject root = new JSONObject(json);
@@ -224,29 +285,37 @@ public class LeetCodeScraper {
 
             for (int i = 0; i < problems.length(); i++) {
                 JSONObject stat = problems.getJSONObject(i).getJSONObject("stat");
+                JSONObject difficulty = problems.getJSONObject(i).getJSONObject("difficulty");
+
                 int number = stat.getInt("frontend_question_id");
                 String title = stat.getString("question__title").trim();
-                allProblems.put(title, number);
+                int level = difficulty.getInt("level");
+
+                ProblemDifficulty problemDifficulty = ProblemDifficulty.fromLevel(level);
+                ProblemInfo problemInfo = new ProblemInfo(number, title, problemDifficulty);
+
+                allProblems.put(title, problemInfo);
             }
 
             logProgress("Обработано задач из API: " + allProblems.size());
 
         } catch (Exception e) {
             logProgress("Ошибка парсинга JSON: " + e.getMessage());
+            logger.error("JSON parsing error", e);
         }
 
         return allProblems;
     }
 
-    private Set<Integer> matchSolvedProblemsWithNumbers(Set<String> solvedTitles, Map<String, Integer> allProblems) {
+    private Set<Integer> matchSolvedProblemsWithNumbers(Set<String> solvedTitles, Map<String, ProblemInfo> allProblems) {
         Set<Integer> solvedProblems = new HashSet<>();
         ProblemMatcher matcher = new ProblemMatcher();
 
         int matchedCount = 0;
         for (String solvedTitle : solvedTitles) {
-            Integer problemNumber = matcher.findProblemNumber(solvedTitle, allProblems);
-            if (problemNumber != null) {
-                solvedProblems.add(problemNumber);
+            ProblemInfo problemInfo = matcher.findProblemInfo(solvedTitle, allProblems);
+            if (problemInfo != null) {
+                solvedProblems.add(problemInfo.getNumber());
                 matchedCount++;
             }
         }
@@ -255,5 +324,10 @@ public class LeetCodeScraper {
         logProgress("Итого найдено номеров решенных задач: " + solvedProblems.size());
 
         return solvedProblems;
+    }
+
+    private boolean isCacheValid() {
+        return problemsCache.containsKey("problems") &&
+                (System.currentTimeMillis() - cacheTimestamp) < CACHE_EXPIRY_TIME;
     }
 }
