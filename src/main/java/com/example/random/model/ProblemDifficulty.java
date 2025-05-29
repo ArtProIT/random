@@ -1,7 +1,7 @@
 package com.example.random.model;
 
 /**
- * Enum РґР»СЏ СѓСЂРѕРІРЅРµР№ СЃР»РѕР¶РЅРѕСЃС‚Рё Р·Р°РґР°С‡ LeetCode
+ * Enum для уровней сложности задач LeetCode
  */
 public enum ProblemDifficulty {
     EASY(1, "Easy"),

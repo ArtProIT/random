@@ -3,6 +3,7 @@ package com.example.random.service;
 import com.example.random.exception.LeetCodeExceptions.ValidationException;
 import com.example.random.model.ProblemDifficulty;
 import com.example.random.model.ProblemInfo;
+import lombok.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -168,23 +169,12 @@ public class RandomGeneratorService {
     /**
      * Класс для хранения статистики по задачам
      */
+    @Value
     public static class ProblemStatistics {
-        private final long total;
-        private final long easy;
-        private final long medium;
-        private final long hard;
-
-        public ProblemStatistics(long total, long easy, long medium, long hard) {
-            this.total = total;
-            this.easy = easy;
-            this.medium = medium;
-            this.hard = hard;
-        }
-
-        public long getTotal() { return total; }
-        public long getEasy() { return easy; }
-        public long getMedium() { return medium; }
-        public long getHard() { return hard; }
+        long total;
+        long easy;
+        long medium;
+        long hard;
 
         @Override
         public String toString() {

@@ -1,7 +1,7 @@
 package com.example.random.config;
 
 /**
- * РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ РґР»СЏ РІРµР±-СЃРєСЂР°РїРёРЅРіР°
+ * Конфигурация для веб-скрапинга
  */
 public class ScrapingConfig {
     public static final int DEFAULT_WAIT_TIME = 3000;
@@ -18,7 +18,7 @@ public class ScrapingConfig {
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     };
 
-    // РЎРµР»РµРєС‚РѕСЂС‹ РґР»СЏ РїРѕРёСЃРєР° СЂРµС€РµРЅРЅС‹С… Р·Р°РґР°С‡
+    // Селекторы для поиска решенных задач
     public static final String[] RECENT_AC_SELECTORS = {
             "text=Recent AC",
             "[data-cy='recent-ac']",

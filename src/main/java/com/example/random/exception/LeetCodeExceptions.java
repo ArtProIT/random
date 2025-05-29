@@ -1,7 +1,7 @@
 package com.example.random.exception;
 
 /**
- * РљР°СЃС‚РѕРјРЅС‹Рµ РёСЃРєР»СЋС‡РµРЅРёСЏ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ LeetCode
+ * Кастомные исключения для работы с LeetCode
  */
 public class LeetCodeExceptions {
 

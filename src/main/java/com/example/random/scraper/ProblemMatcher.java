@@ -7,17 +7,17 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * РЈР»СѓС‡С€РµРЅРЅС‹Р№ РєР»Р°СЃСЃ РґР»СЏ СЃРѕРїРѕСЃС‚Р°РІР»РµРЅРёСЏ РЅР°Р·РІР°РЅРёР№ Р·Р°РґР°С‡ СЃ РёС… РёРЅС„РѕСЂРјР°С†РёРµР№
+ * Улучшенный класс для сопоставления названий задач с их информацией
  */
 public class ProblemMatcher {
     private static final Logger logger = LoggerFactory.getLogger(ProblemMatcher.class);
     private static final double SIMILARITY_THRESHOLD = 0.8;
 
     /**
-     * РќР°С…РѕРґРёС‚ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°РґР°С‡Рµ РїРѕ РµС‘ РЅР°Р·РІР°РЅРёСЋ
+     * Находит информацию о задаче по её названию
      */
     public ProblemInfo findProblemInfo(String solvedTitle, Map<String, ProblemInfo> allProblems) {
-        // РўРѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ
+        // Точное совпадение
         ProblemInfo exactMatch = allProblems.get(solvedTitle);
         if (exactMatch != null) {
             logger.debug("Exact match found for: {}", solvedTitle);
@@ -70,8 +70,8 @@ public class ProblemMatcher {
         }
 
         return title.toLowerCase()
-                .replaceAll("[^a-z0-9\\s]", "") // РЈРґР°Р»СЏСЋ СЃРїРµС†РёР°Р»СЊРЅС‹Рµ СЃРёРјРІРѕР»С‹
-                .replaceAll("\\s+", " ")        // РњРЅРѕР¶РµСЃС‚РІРµРЅРЅС‹Рµ РїСЂРѕР±РµР»С‹ РІ РѕРґРёРЅ
+                .replaceAll("[^a-z0-9\\s]", "") // Удаляю специальные символы
+                .replaceAll("\\s+", " ")        // Множественные пробелы в один
                 .trim();
     }
 
