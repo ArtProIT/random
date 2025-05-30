@@ -51,6 +51,10 @@ public class MainWindow {
     private JPanel difficultyPanel;
     private JLabel difficultyHintLabel;
 
+    // Новый компонент для настройки headless режима
+    private JCheckBox headlessCheckBox;
+    private JPanel browserSettingsPanel;
+
     // Состояние приложения
     private Map<String, ProblemInfo> allProblemsInfo = new HashMap<>();
     private boolean problemsLoaded = false;
@@ -70,7 +74,7 @@ public class MainWindow {
     private void initializeComponents() {
         frame = new JFrame("Генератор случайного числа LeetCode - Улучшенная версия");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(750, 700);
+        frame.setSize(750, 750); // Увеличиваем высоту для новых элементов
         frame.setLayout(new BorderLayout());
 
         // Основная панель с полями ввода
@@ -113,6 +117,9 @@ public class MainWindow {
         mainParams.add(new JLabel(""));
         mainParams.add(resultLabel);
 
+        // Панель настроек браузера
+        browserSettingsPanel = createBrowserSettingsPanel();
+
         // Панель сложности
         difficultyPanel = createDifficultyPanel();
 
@@ -120,9 +127,40 @@ public class MainWindow {
         JPanel statsPanel = new JPanel(new FlowLayout());
         statsPanel.add(statisticsLabel);
 
-        panel.add(mainParams, BorderLayout.CENTER);
-        panel.add(difficultyPanel, BorderLayout.SOUTH);
+        // Вертикальная компоновка для всех панелей настроек
+        JPanel settingsContainer = new JPanel(new BorderLayout());
+        settingsContainer.add(mainParams, BorderLayout.NORTH);
+        settingsContainer.add(browserSettingsPanel, BorderLayout.CENTER);
+        settingsContainer.add(difficultyPanel, BorderLayout.SOUTH);
+
         panel.add(statsPanel, BorderLayout.NORTH);
+        panel.add(settingsContainer, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel createBrowserSettingsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("Настройки браузера"));
+
+        // Панель с чекбоксом
+        JPanel checkboxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+
+        headlessCheckBox = new JCheckBox("Скрыть браузер (headless режим)", true); // По умолчанию включен
+        headlessCheckBox.setToolTipText("<html>Если включено - браузер работает в фоновом режиме (быстрее)<br/>" +
+                "Если выключено - можно видеть как открывается браузер (медленнее)</html>");
+
+        checkboxPanel.add(headlessCheckBox);
+
+        // Подсказка
+        JLabel browserHintLabel = new JLabel(
+                "<html><i>Включите чекбокс для быстрой работы, выключите чтобы видеть процесс в браузере</i></html>",
+                SwingConstants.LEFT
+        );
+        browserHintLabel.setForeground(Color.GRAY);
+
+        panel.add(checkboxPanel, BorderLayout.NORTH);
+        panel.add(browserHintLabel, BorderLayout.SOUTH);
 
         return panel;
     }
@@ -200,14 +238,15 @@ public class MainWindow {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Ход выполнения"));
 
-        progressArea = new JTextArea(12, 60);
+        progressArea = new JTextArea(10, 60); // Уменьшаем размер для экономии места
         progressArea.setEditable(false);
         progressArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         progressArea.setBackground(new Color(248, 248, 248));
         progressArea.setText("Готов к работе...\n" +
-                "1. Нажмите 'Загрузить все задачи' для активации фильтрации по сложности\n" +
-                "2. Выберите уровни сложности (Easy/Medium/Hard)\n" +
-                "3. Нажмите 'Сгенерировать' для получения случайного номера\n");
+                "1. Настройте режим браузера (headless для быстрой работы)\n" +
+                "2. Нажмите 'Загрузить все задачи' для активации фильтрации по сложности\n" +
+                "3. Выберите уровни сложности (Easy/Medium/Hard)\n" +
+                "4. Нажмите 'Сгенерировать' для получения случайного номера\n");
 
         progressScrollPane = new JScrollPane(progressArea);
         progressScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -221,6 +260,12 @@ public class MainWindow {
         fetchButton.addActionListener(this::onFetchButtonClick);
         loadProblemsButton.addActionListener(this::onLoadProblemsButtonClick);
         generateButton.addActionListener(this::onGenerateButtonClick);
+
+        // Добавляем слушатель для headless чекбокса
+        headlessCheckBox.addActionListener(e -> {
+            boolean isHeadless = headlessCheckBox.isSelected();
+            addProgressStep("Режим браузера изменен на: " + (isHeadless ? "headless (скрытый)" : "обычный (видимый)"));
+        });
     }
 
     /**
@@ -283,12 +328,16 @@ public class MainWindow {
 
         clearProgress();
         addProgressStep("Начинаем получение данных с LeetCode для пользователя: " + username);
+
+        boolean isHeadless = headlessCheckBox.isSelected();
+        addProgressStep("Режим браузера: " + (isHeadless ? "headless (скрытый)" : "обычный (видимый)"));
+
         setFetchButtonLoading(true);
 
         SwingWorker<Set<Integer>, Void> worker = new SwingWorker<Set<Integer>, Void>() {
             @Override
             protected Set<Integer> doInBackground() throws Exception {
-                return leetCodeService.getSolvedProblems(username, MainWindow.this::addProgressStep);
+                return leetCodeService.getSolvedProblems(username, isHeadless, MainWindow.this::addProgressStep);
             }
 
             @Override
@@ -311,12 +360,16 @@ public class MainWindow {
         clearProgress();
         addProgressStep("Начинаем загрузку информации о всех задачах...");
         addProgressStep("Это может занять некоторое время...");
+
+        boolean isHeadless = headlessCheckBox.isSelected();
+        addProgressStep("Режим браузера: " + (isHeadless ? "headless (скрытый)" : "обычный (видимый)"));
+
         setLoadProblemsButtonLoading(true);
 
         SwingWorker<Map<String, ProblemInfo>, Void> worker = new SwingWorker<Map<String, ProblemInfo>, Void>() {
             @Override
             protected Map<String, ProblemInfo> doInBackground() throws Exception {
-                return leetCodeService.getAllProblemsInfo(MainWindow.this::addProgressStep);
+                return leetCodeService.getAllProblemsInfo(isHeadless, MainWindow.this::addProgressStep);
             }
 
             @Override
@@ -544,6 +597,9 @@ public class MainWindow {
     private void setFetchButtonLoading(boolean loading) {
         fetchButton.setEnabled(!loading);
         fetchButton.setText(loading ? FETCH_BUTTON_LOADING_TEXT : FETCH_BUTTON_DEFAULT_TEXT);
+
+        // Блокируем чекбокс headless во время выполнения операций
+        headlessCheckBox.setEnabled(!loading);
     }
 
     private void setLoadProblemsButtonLoading(boolean loading) {
@@ -555,8 +611,10 @@ public class MainWindow {
             easyCheckBox.setEnabled(false);
             mediumCheckBox.setEnabled(false);
             hardCheckBox.setEnabled(false);
+            headlessCheckBox.setEnabled(false);
         } else {
             updateUIState(); // Восстанавливаем состояние после загрузки
+            headlessCheckBox.setEnabled(true);
         }
     }
 

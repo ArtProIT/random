@@ -16,13 +16,25 @@ public class BrowserManager implements AutoCloseable {
     private final Playwright playwright;
     private final Browser browser;
     private final Random random;
+    private final boolean headless;
     private Consumer<String> progressCallback;
 
-    public BrowserManager() {
+    /**
+     * Конструктор с поддержкой headless режима
+     */
+    public BrowserManager(boolean headless) {
+        this.headless = headless;
         this.random = new Random();
         this.playwright = Playwright.create();
         this.browser = createBrowser();
-        log.info("Browser manager initialized");
+        log.info("Browser manager initialized (headless: {})", headless);
+    }
+
+    /**
+     * Конструктор по умолчанию (headless = true для обратной совместимости)
+     */
+    public BrowserManager() {
+        this(true);
     }
 
     public void setProgressCallback(Consumer<String> callback) {
@@ -37,11 +49,21 @@ public class BrowserManager implements AutoCloseable {
     }
 
     private Browser createBrowser() {
-        logProgress("Запускаем браузер Chromium...");
+        String modeText = headless ? "скрытом (headless)" : "видимом";
+        logProgress("Запускаем браузер Chromium в " + modeText + " режиме...");
 
-        return playwright.chromium().launch(new BrowserType.LaunchOptions()
-                .setHeadless(false)
-                .setSlowMo(300));
+        BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
+                .setHeadless(headless);
+
+        // Добавляем SlowMo только для не-headless режима для лучшей визуализации
+        if (!headless) {
+            options.setSlowMo(300);
+            logProgress("Включена медленная анимация для лучшей визуализации");
+        } else {
+            logProgress("Headless режим - максимальная скорость выполнения");
+        }
+
+        return playwright.chromium().launch(options);
     }
 
     /**
@@ -54,8 +76,15 @@ public class BrowserManager implements AutoCloseable {
         String userAgent = ScrapingConfig.USER_AGENTS[random.nextInt(ScrapingConfig.USER_AGENTS.length)];
         page.setExtraHTTPHeaders(Map.of("User-Agent", userAgent));
 
-        log.debug("Created new page with User-Agent: {}", userAgent);
+        log.debug("Created new page with User-Agent: {} (headless: {})", userAgent, headless);
         return page;
+    }
+
+    /**
+     * Получает текущий режим браузера
+     */
+    public boolean isHeadless() {
+        return headless;
     }
 
     @Override

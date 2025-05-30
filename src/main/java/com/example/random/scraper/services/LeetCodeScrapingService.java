@@ -53,10 +53,11 @@ public class LeetCodeScrapingService {
     /**
      * Получает номера решенных задач для пользователя
      */
-    public Set<Integer> fetchSolvedProblems(String username) throws LeetCodeScrapingException {
+    public Set<Integer> fetchSolvedProblems(String username, boolean headless) throws LeetCodeScrapingException {
         logProgress("Начинаем получение решенных задач для пользователя: " + username);
+        logProgress("Режим браузера: " + (headless ? "headless (скрытый)" : "обычный (видимый)"));
 
-        try (BrowserManager browserManager = new BrowserManager()) {
+        try (BrowserManager browserManager = new BrowserManager(headless)) {
             browserManager.setProgressCallback(progressCallback);
 
             // Получаем названия решенных задач
@@ -86,14 +87,16 @@ public class LeetCodeScrapingService {
     /**
      * Получает информацию о всех задачах с проверкой кэша
      */
-    public Map<String, ProblemInfo> getAllProblemsInfo() throws ApiDataException {
+    public Map<String, ProblemInfo> getAllProblemsInfo(boolean headless) throws ApiDataException {
         // Проверяем кэш
         Map<String, ProblemInfo> cachedProblems = cacheService.getCachedProblems();
         if (cachedProblems != null) {
             return cachedProblems;
         }
 
-        try (BrowserManager browserManager = new BrowserManager()) {
+        logProgress("Режим браузера: " + (headless ? "headless (скрытый)" : "обычный (видимый)"));
+
+        try (BrowserManager browserManager = new BrowserManager(headless)) {
             browserManager.setProgressCallback(progressCallback);
             Map<String, ProblemInfo> problems = getAllProblemsInfo(browserManager);
 

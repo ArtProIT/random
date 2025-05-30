@@ -24,19 +24,19 @@ public class LeetCodeService {
     /**
      * Получает решенные задачи пользователя
      */
-    public Set<Integer> getSolvedProblems(String username, Consumer<String> progressCallback)
+    public Set<Integer> getSolvedProblems(String username, boolean headless, Consumer<String> progressCallback)
             throws LeetCodeScrapingException, ValidationException {
 
         if (!isValidUsername(username)) {
             throw new ValidationException("Некорректный username: " + username);
         }
 
-        log.info("Получаем решенные задачи для пользователя: {}", username);
+        log.info("Получаем решенные задачи для пользователя: {} (headless: {})", username, headless);
 
         scrapingService.setProgressCallback(progressCallback);
 
         try {
-            Set<Integer> solvedProblems = scrapingService.fetchSolvedProblems(username);
+            Set<Integer> solvedProblems = scrapingService.fetchSolvedProblems(username, headless);
             log.info("Найдено решенных задач: {}", solvedProblems.size());
             return solvedProblems;
 
@@ -52,15 +52,15 @@ public class LeetCodeService {
     /**
      * Получает информацию о всех задачах
      */
-    public Map<String, ProblemInfo> getAllProblemsInfo(Consumer<String> progressCallback)
+    public Map<String, ProblemInfo> getAllProblemsInfo(boolean headless, Consumer<String> progressCallback)
             throws ApiDataException {
 
-        log.info("Получаем информацию о всех задачах");
+        log.info("Получаем информацию о всех задачах (headless: {})", headless);
 
         scrapingService.setProgressCallback(progressCallback);
 
         try {
-            Map<String, ProblemInfo> problems = scrapingService.getAllProblemsInfo();
+            Map<String, ProblemInfo> problems = scrapingService.getAllProblemsInfo(headless);
             log.info("Загружено задач: {}", problems.size());
             return problems;
 
