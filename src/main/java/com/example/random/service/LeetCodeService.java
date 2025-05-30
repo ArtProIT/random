@@ -2,93 +2,97 @@ package com.example.random.service;
 
 import com.example.random.exception.LeetCodeExceptions.*;
 import com.example.random.model.ProblemInfo;
-import com.example.random.scraper.LeetCodeScraper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.example.random.scraper.services.LeetCodeScrapingService;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * РЈР»СѓС‡С€РµРЅРЅС‹Р№ СЃРµСЂРІРёСЃ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ РґР°РЅРЅС‹РјРё LeetCode
+ * Обновленный сервис для работы с LeetCode
+ * Использует новую архитектуру на основе Page Object Model
  */
+@Slf4j
 public class LeetCodeService {
-    private static final Logger logger = LoggerFactory.getLogger(LeetCodeService.class);
-
-    private final LeetCodeScraper scraper;
+    private final LeetCodeScrapingService scrapingService;
 
     public LeetCodeService() {
-        this.scraper = new LeetCodeScraper();
+        this.scrapingService = new LeetCodeScrapingService();
     }
 
     /**
-     * РџРѕР»СѓС‡Р°РµС‚ РЅРѕРјРµСЂР° СЂРµС€РµРЅРЅС‹С… Р·Р°РґР°С‡ РґР»СЏ СѓРєР°Р·Р°РЅРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
-     */
-    public Set<Integer> getSolvedProblems(String username) throws LeetCodeScrapingException, ValidationException {
-        validateUsername(username);
-        logger.info("Fetching solved problems for user: {}", username);
-
-        try {
-            return scraper.fetchSolvedProblems(username.trim());
-        } catch (LeetCodeScrapingException e) {
-            logger.error("Failed to fetch solved problems for user: {}", username, e);
-            throw e;
-        }
-    }
-
-    /**
-     * РџРѕР»СѓС‡Р°РµС‚ РЅРѕРјРµСЂР° СЂРµС€РµРЅРЅС‹С… Р·Р°РґР°С‡ СЃ callback РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РїСЂРѕРіСЂРµСЃСЃР°
+     * Получает решенные задачи пользователя
      */
     public Set<Integer> getSolvedProblems(String username, Consumer<String> progressCallback)
             throws LeetCodeScrapingException, ValidationException {
-        validateUsername(username);
 
-        scraper.setProgressCallback(progressCallback);
-        return getSolvedProblems(username);
-    }
+        if (!isValidUsername(username)) {
+            throw new ValidationException("Некорректный username: " + username);
+        }
 
-    /**
-     * РџРѕР»СѓС‡Р°РµС‚ РїРѕР»РЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РІСЃРµС… Р·Р°РґР°С‡Р°С…
-     */
-    public Map<String, ProblemInfo> getAllProblemsInfo() throws ApiDataException {
-        logger.info("Fetching all problems info from API");
+        log.info("Получаем решенные задачи для пользователя: {}", username);
+
+        scrapingService.setProgressCallback(progressCallback);
 
         try {
-            return scraper.getAllProblemsInfo();
-        } catch (ApiDataException e) {
-            logger.error("Failed to fetch problems info from API", e);
+            Set<Integer> solvedProblems = scrapingService.fetchSolvedProblems(username);
+            log.info("Найдено решенных задач: {}", solvedProblems.size());
+            return solvedProblems;
+
+        } catch (LeetCodeScrapingException e) {
+            log.error("Ошибка при получении решенных задач для пользователя: {}", username, e);
             throw e;
+        } catch (Exception e) {
+            log.error("Неожиданная ошибка при получении решенных задач", e);
+            throw new LeetCodeScrapingException("Неожиданная ошибка: " + e.getMessage(), e);
         }
     }
 
     /**
-     * РџРѕР»СѓС‡Р°РµС‚ РїРѕР»РЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РІСЃРµС… Р·Р°РґР°С‡Р°С… СЃ callback РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РїСЂРѕРіСЂРµСЃСЃР°
+     * Получает информацию о всех задачах
      */
-    public Map<String, ProblemInfo> getAllProblemsInfo(Consumer<String> progressCallback) throws ApiDataException {
-        scraper.setProgressCallback(progressCallback);
-        return getAllProblemsInfo();
+    public Map<String, ProblemInfo> getAllProblemsInfo(Consumer<String> progressCallback)
+            throws ApiDataException {
+
+        log.info("Получаем информацию о всех задачах");
+
+        scrapingService.setProgressCallback(progressCallback);
+
+        try {
+            Map<String, ProblemInfo> problems = scrapingService.getAllProblemsInfo();
+            log.info("Загружено задач: {}", problems.size());
+            return problems;
+
+        } catch (ApiDataException e) {
+            log.error("Ошибка при получении информации о задачах", e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Неожиданная ошибка при получении информации о задачах", e);
+            throw new ApiDataException("Неожиданная ошибка: " + e.getMessage(), e);
+        }
     }
 
     /**
-     * РџСЂРѕРІРµСЂСЏРµС‚ РІР°Р»РёРґРЅРѕСЃС‚СЊ username
+     * Проверяет валидность username
      */
     public boolean isValidUsername(String username) {
-        return username != null && !username.trim().isEmpty() && username.trim().length() >= 2;
+        return scrapingService.isValidUsername(username);
     }
 
-    private void validateUsername(String username) throws ValidationException {
-        if (username == null || username.trim().isEmpty()) {
-            throw new ValidationException("Username РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј");
-        }
+    /**
+     * Получает статистику кэша
+     */
+    public String getCacheInfo() {
+        var stats = scrapingService.getCacheStats();
+        return stats.toString();
+    }
 
-        String trimmedUsername = username.trim();
-        if (trimmedUsername.length() < 2) {
-            throw new ValidationException("Username РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ РјРёРЅРёРјСѓРј 2 СЃРёРјРІРѕР»Р°");
-        }
-
-        if (!trimmedUsername.matches("^[a-zA-Z0-9_-]+$")) {
-            throw new ValidationException("Username РјРѕР¶РµС‚ СЃРѕРґРµСЂР¶Р°С‚СЊ С‚РѕР»СЊРєРѕ Р±СѓРєРІС‹, С†РёС„СЂС‹, РґРµС„РёСЃС‹ Рё РїРѕРґС‡РµСЂРєРёРІР°РЅРёСЏ");
-        }
+    /**
+     * Очищает кэш
+     */
+    public void clearCache() {
+        log.info("Очищаем кэш LeetCode данных");
+        scrapingService.clearCache();
     }
 }

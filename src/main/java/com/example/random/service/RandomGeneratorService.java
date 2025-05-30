@@ -11,13 +11,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * РЈР»СѓС‡С€РµРЅРЅС‹Р№ СЃРµСЂРІРёСЃ РґР»СЏ РіРµРЅРµСЂР°С†РёРё СЃР»СѓС‡Р°Р№РЅС‹С… С‡РёСЃРµР» СЃ РёСЃРєР»СЋС‡РµРЅРёСЏРјРё Рё С„РёР»СЊС‚СЂР°С†РёРµР№ РїРѕ СЃР»РѕР¶РЅРѕСЃС‚Рё
+ * Улучшенный сервис для генерации случайных чисел с исключениями и фильтрацией по сложности
  */
 public class RandomGeneratorService {
     private static final Logger logger = LoggerFactory.getLogger(RandomGeneratorService.class);
 
     /**
-     * Р“РµРЅРµСЂРёСЂСѓРµС‚ СЃР»СѓС‡Р°Р№РЅРѕРµ С‡РёСЃР»Рѕ РІ Р·Р°РґР°РЅРЅРѕРј РґРёР°РїР°Р·РѕРЅРµ, РёСЃРєР»СЋС‡Р°СЏ СѓРєР°Р·Р°РЅРЅС‹Рµ С‡РёСЃР»Р°
+     * Генерирует случайное число в заданном диапазоне, исключая указанные числа
      */
     public Integer generateRandomNumber(int min, int max, Set<Integer> excludeSet) throws ValidationException {
         validateRange(min, max);
@@ -37,7 +37,7 @@ public class RandomGeneratorService {
     }
 
     /**
-     * Р“РµРЅРµСЂРёСЂСѓРµС‚ СЃР»СѓС‡Р°Р№РЅРѕРµ С‡РёСЃР»Рѕ РёР· Р·Р°РґР°С‡ СЃ СѓС‡РµС‚РѕРј С„РёР»СЊС‚СЂРѕРІ РїРѕ СЃР»РѕР¶РЅРѕСЃС‚Рё
+     * Генерирует случайное число из задач с учетом фильтров по сложности
      */
     public Integer generateRandomProblemNumber(int min, int max, Set<Integer> excludeSet,
                                                Set<ProblemDifficulty> allowedDifficulties,
@@ -46,10 +46,10 @@ public class RandomGeneratorService {
         validateDifficulties(allowedDifficulties);
 
         if (allProblems == null || allProblems.isEmpty()) {
-            throw new ValidationException("РЎРїРёСЃРѕРє Р·Р°РґР°С‡ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј");
+            throw new ValidationException("Список задач не может быть пустым");
         }
 
-        // РџРѕР»СѓС‡Р°РµРј РІСЃРµ Р·Р°РґР°С‡Рё РІ РґРёР°РїР°Р·РѕРЅРµ СЃ РЅСѓР¶РЅРѕР№ СЃР»РѕР¶РЅРѕСЃС‚СЊСЋ
+        // Получаем все задачи в диапазоне с нужной сложностью
         List<Integer> possibleNumbers = allProblems.values().stream()
                 .filter(problem -> problem.getNumber() >= min && problem.getNumber() <= max)
                 .filter(problem -> allowedDifficulties.contains(problem.getDifficulty()))
@@ -72,7 +72,7 @@ public class RandomGeneratorService {
     }
 
     /**
-     * РџРѕР»СѓС‡Р°РµС‚ СЃС‚Р°С‚РёСЃС‚РёРєСѓ РїРѕ РґРѕСЃС‚СѓРїРЅС‹Рј Р·Р°РґР°С‡Р°Рј СЃ СѓС‡РµС‚РѕРј С„РёР»СЊС‚СЂРѕРІ
+     * Получает статистику по доступным задачам с учетом фильтров
      */
     public ProblemStatistics getProblemStatistics(int min, int max, Set<Integer> excludeSet,
                                                   Set<ProblemDifficulty> allowedDifficulties,
@@ -96,7 +96,7 @@ public class RandomGeneratorService {
     }
 
     /**
-     * РџР°СЂСЃРёС‚ СЃС‚СЂРѕРєСѓ СЃ С‡РёСЃР»Р°РјРё, СЂР°Р·РґРµР»РµРЅРЅС‹РјРё Р·Р°РїСЏС‚С‹РјРё
+     * Парсит строку с числами, разделенными запятыми
      */
     public Set<Integer> parseExcludeNumbers(String excludeText) {
         if (excludeText == null || excludeText.trim().isEmpty()) {
@@ -116,7 +116,7 @@ public class RandomGeneratorService {
     }
 
     /**
-     * РљРѕРЅРІРµСЂС‚РёСЂСѓРµС‚ РјРЅРѕР¶РµСЃС‚РІРѕ С‡РёСЃРµР» РІ СЃС‚СЂРѕРєСѓ, СЂР°Р·РґРµР»РµРЅРЅСѓСЋ Р·Р°РїСЏС‚С‹РјРё
+     * Конвертирует множество чисел в строку, разделенную запятыми
      */
     public String formatExcludeNumbers(Set<Integer> numbers) {
         if (numbers == null || numbers.isEmpty()) {
@@ -134,16 +134,16 @@ public class RandomGeneratorService {
 
     private void validateRange(int min, int max) throws ValidationException {
         if (min > max) {
-            throw new ValidationException("РњРёРЅРёРјР°Р»СЊРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ Р±РѕР»СЊС€Рµ РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ");
+            throw new ValidationException("Минимальное значение не может быть больше максимального");
         }
         if (min < 1) {
-            throw new ValidationException("РњРёРЅРёРјР°Р»СЊРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ Р±РѕР»СЊС€Рµ 0");
+            throw new ValidationException("Минимальное значение должно быть больше 0");
         }
     }
 
     private void validateDifficulties(Set<ProblemDifficulty> difficulties) throws ValidationException {
         if (difficulties == null || difficulties.isEmpty()) {
-            throw new ValidationException("Р”РѕР»Р¶РµРЅ Р±С‹С‚СЊ РІС‹Р±СЂР°РЅ С…РѕС‚СЏ Р±С‹ РѕРґРёРЅ СѓСЂРѕРІРµРЅСЊ СЃР»РѕР¶РЅРѕСЃС‚Рё");
+            throw new ValidationException("Должен быть выбран хотя бы один уровень сложности");
         }
     }
 
@@ -161,13 +161,13 @@ public class RandomGeneratorService {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            logger.warn("РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ С‡РёСЃР»Рѕ: {}", value);
+            logger.warn("Некорректное число: {}", value);
             return null;
         }
     }
 
     /**
-     * РљР»Р°СЃСЃ РґР»СЏ С…СЂР°РЅРµРЅРёСЏ СЃС‚Р°С‚РёСЃС‚РёРєРё РїРѕ Р·Р°РґР°С‡Р°Рј
+     * Класс для хранения статистики по задачам
      */
     @Value
     public static class ProblemStatistics {
